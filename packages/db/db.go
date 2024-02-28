@@ -2,26 +2,22 @@ package db
 
 import (
 	"context"
-	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var Pool *pgxpool.Pool
-
-func DbConnect() (*pgxpool.Pool, error) {
-	dbUrl := os.Getenv("DB_URL")
+func DbConnect(dbUrl string) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.New(context.Background(), dbUrl)
 	if err != nil {
 		return pool, err
 	}
-	Pool = pool
 
-	return Pool, nil
+	return pool, nil
 }
 
-func DbCloseConnection() {
-	if Pool != nil {
-		Pool.Close()
+func DbCloseConnection(pool *pgxpool.Pool) error {
+	if pool != nil {
+		pool.Close()
 	}
+	return nil
 }

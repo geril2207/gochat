@@ -1,16 +1,32 @@
-package utils
+package app
 
 import (
+	"net/http"
 	"reflect"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 )
 
-func FormatValidationErrors(err error) fiber.Map {
-	return fiber.Map{
+type RequestValidator struct {
+	validator *validator.Validate
+}
+
+func NewRequestValidator(validator *validator.Validate) *RequestValidator {
+	return &RequestValidator{validator: validator}
+}
+
+func (v *RequestValidator) Validate(i interface{}) error {
+	if err := v.validator.Struct(i); err != nil {
+		return echo.NewHTTPError(http.StatusUnprocessableEntity, FormatValidationErrors(err))
+	}
+	return nil
+}
+
+func FormatValidationErrors(err error) map[string]interface{} {
+	return map[string]interface{}{
 		"errors": ValidatorErrors(err),
 	}
 }

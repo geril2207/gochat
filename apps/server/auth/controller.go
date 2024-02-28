@@ -1,19 +1,22 @@
 package auth
 
 import (
-	"os"
+	"net/http"
 	"time"
 
-	"github.com/geril2207/gochat/apps/server/utils"
-	"github.com/geril2207/gochat/packages/db/users"
-	"github.com/gofiber/fiber/v2"
+	"github.com/geril2207/gochat/packages/config"
+	"github.com/geril2207/gochat/packages/models"
+	"github.com/geril2207/gochat/packages/services"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthController struct {
-	Pool *pgxpool.Pool
+	pool         *pgxpool.Pool
+	usersService services.UsersService
+	config       config.EnvConfig
 }
 
 const (
@@ -21,60 +24,69 @@ const (
 	HashPasswordCost        = bcrypt.DefaultCost
 )
 
-func Login(ctx *fiber.Ctx) error {
+var WrongCredentialsResponse = map[string]interface{}{
+	"message": WrongCredentialsMessage,
+}
+
+func ProvideAuthController(pool *pgxpool.Pool, usersService services.UsersService, config config.EnvConfig) *AuthController {
+	return &AuthController{
+		pool:         pool,
+		usersService: usersService,
+		config:       config,
+	}
+}
+
+func (c *AuthController) Login(ctx echo.Context) error {
 	var body *LoginBody
-	if err := ctx.BodyParser(&body); err != nil {
+	if err := ctx.Bind(&body); err != nil {
 		return err
 	}
-	validate := utils.NewValidator()
-	if err := validate.Struct(body); err != nil {
-		return ctx.Status(fiber.StatusBadRequest).JSON(utils.FormatValidationErrors(err))
+	if err := ctx.Validate(body); err != nil {
+		return err
 	}
 
-	user, err := users.GetUserByLogin(body.Login)
+	user, err := c.usersService.GetUserByLogin(body.Login)
 	if err != nil || user.Id == 0 {
-		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": WrongCredentialsMessage,
-		})
+		return ctx.JSON(http.StatusBadRequest, WrongCredentialsResponse)
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password))
 	if err != nil {
-		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": WrongCredentialsMessage,
-		})
+		return ctx.JSON(http.StatusBadRequest, WrongCredentialsResponse)
 	}
 
-	tokens, err := GenerateTokens(user)
+	tokens, err := c.GenerateTokens(user)
 
 	if err != nil {
 		return err
 	}
 
-	ctx.Cookie(&fiber.Cookie{
+	refreshCookie := &http.Cookie{
 		Value:    tokens.Refresh,
-		HTTPOnly: true,
+		HttpOnly: true,
 		Secure:   true,
 		Name:     "refresh",
-	})
-	return ctx.JSON(fiber.Map{
+		Path:     "/",
+	}
+	ctx.SetCookie(refreshCookie)
+
+	return ctx.JSON(http.StatusOK, map[string]interface{}{
 		"user":   user,
 		"tokens": tokens,
 	})
 }
 
-func Register(ctx *fiber.Ctx) error {
+func (c *AuthController) Register(ctx echo.Context) error {
 	var body *LoginBody
-	if err := ctx.BodyParser(&body); err != nil {
+	if err := ctx.Bind(&body); err != nil {
 		return err
 	}
-	validate := utils.NewValidator()
-	if err := validate.Struct(body); err != nil {
-		return ctx.Status(fiber.StatusBadRequest).JSON(utils.FormatValidationErrors(err))
+	if err := ctx.Validate(body); err != nil {
+		return err
 	}
-	isExists, _ := users.IsUserExistsInDb(body.Login)
+	isExists, _ := c.usersService.IsUserExistsInDb(body.Login)
 	if isExists {
-		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+		return ctx.JSON(http.StatusBadRequest, map[string]interface{}{
 			"message": "User with this login already exists",
 		})
 	}
@@ -84,21 +96,27 @@ func Register(ctx *fiber.Ctx) error {
 		return err
 	}
 
-	user, err := users.InsertUser(body.Login, string(hashedPassword))
+	user, err := c.usersService.InsertUser(body.Login, string(hashedPassword))
 	if err != nil {
 		return err
 	}
 
-	tokens, err := GenerateTokens(user)
+	tokens, err := c.GenerateTokens(user)
 
 	if err != nil {
 		return err
 	}
 
-	return ctx.JSON(fiber.Map{
+	return ctx.JSON(http.StatusOK, map[string]interface{}{
 		"user":   user,
 		"tokens": tokens,
 	})
+}
+
+func (c *AuthController) Refresh(ctx echo.Context) error {
+	userId := ctx.Get("user").(*jwt.Token).Claims.(*JwtCustomClaims).Id
+
+	return ctx.JSON(http.StatusOK, userId)
 }
 
 type AuthTokens struct {
@@ -106,15 +124,20 @@ type AuthTokens struct {
 	Refresh string `json:"refresh"`
 }
 
-func GenerateTokens(user users.User) (AuthTokens, error) {
-	key := os.Getenv("JWT_KEY")
+type JwtCustomClaims struct {
+	Id int `json:"id"`
+	jwt.RegisteredClaims
+}
+
+func (c *AuthController) GenerateTokens(user models.User) (AuthTokens, error) {
+	key := c.config.JwtKey
 
 	if key == "" {
-		panic("JWT_KEY not found")
+		panic("JwtKey not found")
 	}
 
-	accessPayload := jwt.MapClaims{"id": user.Id, "iat": time.Now().Add(time.Minute * 30).Unix()}
-	refreshPayload := jwt.MapClaims{"id": user.Id, "iat": time.Now().Add(time.Hour * 24 * 30).Unix()}
+	accessPayload := &JwtCustomClaims{user.Id, jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 30))}}
+	refreshPayload := &JwtCustomClaims{user.Id, jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24 * 30))}}
 
 	jwtAccessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessPayload)
 	jwtRefreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshPayload)
