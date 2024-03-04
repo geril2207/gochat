@@ -3,4 +3,5 @@
 .env*.local
 **/node_modules
 postgres_data
+tmp
 # apps/server/docs

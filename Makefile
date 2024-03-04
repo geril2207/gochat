@@ -11,6 +11,9 @@ migrate-up:
 migrate-create:
 	migrate create -ext sql -dir $(MIGRATIONS_FOLDER) -seq $(NAME) 
 
+db-psql-connect:
+	psql ${DB_URL}
+
 swagger-gen:
 	cd apps/server && swag init -g server.go
 
@@ -18,4 +21,4 @@ server-run:
 	go run ./apps/server
 
 server-dev:
-	watchexec -r -i "apps/server/docs/*" $(MAKE) server-run
+	air -c ./apps/server/.air.toml
