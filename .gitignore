@@ -5,3 +5,8 @@
 postgres_data
 tmp
 # apps/server/docs
+
+.nx/installation
+.nx/cache
+.nx/installation
+.nx/cache
