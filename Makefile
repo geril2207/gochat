@@ -21,4 +21,4 @@ server-run:
 	go run ./apps/server
 
 server-dev:
-	air -c ./apps/server/.air.toml
+	cd ./apps/server/ && air

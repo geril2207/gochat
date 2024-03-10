@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
@@ -28,6 +29,10 @@ func New() (*EnvConfig, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, err
+	}
+
+	if strings.Contains(wd, "apps/server") {
+		wd = filepath.Join(wd, "../..")
 	}
 
 	envPath := filepath.Join(wd, ".env")

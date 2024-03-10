@@ -1,0 +1,8 @@
+{
+  "name": "@repo/server",
+  "scripts": {
+    "build": "go build ./ -o dist/server",
+    "start": "go run ./ -o dist/server",
+    "dev": "air"
+  }
+}

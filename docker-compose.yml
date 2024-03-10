@@ -13,3 +13,16 @@ services:
       POSTGRES_PASSWORD: ${DB_PASS}
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
+
+  server:
+    container_name: gochat_server
+    build:
+      context: .
+      dockerfile: ./apps/server/Dockerfile
+    ports:
+      - 4001:4001
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - db

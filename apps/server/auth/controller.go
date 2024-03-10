@@ -8,6 +8,7 @@ import (
 	"github.com/geril2207/gochat/packages/models"
 	"github.com/geril2207/gochat/packages/services"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
@@ -46,8 +47,11 @@ func (c *AuthController) Login(ctx echo.Context) error {
 	}
 
 	user, err := c.usersService.GetUserByLogin(body.Login)
-	if err != nil || user.Id == 0 {
-		return ctx.JSON(http.StatusBadRequest, WrongCredentialsResponse)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return ctx.JSON(http.StatusBadRequest, WrongCredentialsResponse)
+		}
+		return err
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password))

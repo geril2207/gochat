@@ -3,10 +3,10 @@
 .env*.local
 **/node_modules
 postgres_data
-tmp
+**/tmp
 # apps/server/docs
 
-.nx/installation
-.nx/cache
-.nx/installation
-.nx/cache
+.turbo
+**/build
+**/dist
+**/.next
