@@ -10,7 +10,7 @@ import (
 )
 
 type EnvConfig struct {
-	ServerPort  string `envconfig:"SERVER_PORT"`
+	ServerPort  string `envconfig:"SERVER_INTERNAL_PORT"`
 	DatabaseUrl string `envconfig:"DB_URL"`
 	JwtKey      string `envconfig:"JWT_KEY"`
 }
